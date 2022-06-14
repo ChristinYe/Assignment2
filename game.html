@@ -1,0 +1,711 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" type="text/css" href="mystyle.css"> 
+<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+<title>Ball catching games</title>
+</head>
+<body>
+<div id="outer">
+<canvas id="gameCanvas" width="800" height="610" style="border:1px solid black; background-color: lightblue; background-image: url('welcome-screen2.png'); background-size: 100% 100%;">
+Your browser does not support the HTML5 canvas tag.</canvas><br/>
+<input type="button" id="start" value="start" onclick="startGame()">
+<input type="button" id="pauseResume" value="pause" onclick="pauseResume()">
+<input type="range" id="volumeControl" min="0" max="1" step="0.1" value="1" onchange="setVolume()">
+<input type="button" id="fourminute" onclick="setDuration(4000 * 60)" class="timesetting" value="4m" style="margin-left: 400px;"></input>
+<input type="button" id="oneminute"  onclick="setDuration(1000 * 60)" class="timesetting" value="1m"></input>
+<input type="button" id="threeminute"  onclick="setDuration(3000 * 60)" class="timesetting" value="3m"></input>
+<input type="button" id="fiveminute"  onclick="setDuration(5000 * 60)" class="timesetting" value="5m"></input>
+
+</div>
+
+<span id="dummy"></span>
+
+<div id="songList">
+
+	<audio id="startSong" class="song" src="sounds/start-game.wav" type="audio/wav" autoplay>Your browser does not support this audio format</audio>
+	<audio id="success" class="song" ><source src="sounds/success-voice.wav" type="audio/wav">Your browser does not support this audio format</audio>
+	<audio id="unhappy" class="song" ><source src="sounds/sad-sound.wav" type="audio/wav">Your browser does not support this audio format</audio>
+	<audio id="endsong" class="song" ><source src="sounds/game-level-completed.wav" type="audio/wav">Your browser does not support this audio format</audio>
+</div>
+
+<script>
+	
+	const speed = 1.6; //ball flying speed = canvasHeight/ (flying time/ updateinterval)  = 610/(6000/16)
+	const delay = 5000;
+	let worldTime = 0;
+	const updateInterval = 16;
+	
+	const startY = -190; //change the location of the robot character with the size-changing of the canvas
+	
+	let pos = 0;
+	let posY = 0;
+	
+	let netTopLeft;
+	let netRightBottom;
+	
+	let bodyTopLeft;
+	let bodyBottomRight;
+
+	let isArmUp = true;
+	let isNetRight = true;
+
+	let gameDuration = 4000 * 60;
+	let score = 0;
+
+	let balls = [];
+	
+	function setDuration(duration) {
+		gameDuration = duration;
+	}
+	
+	const myCanvas = document.getElementById("gameCanvas");
+	window.addEventListener("keydown", (event) => {
+		const moveSpeed = 10;
+		switch (event.keyCode) {
+			case 37: {//left
+				if (pos > -300){
+					pos -= moveSpeed;
+				}
+				isNetRight = false;
+				break;
+			}
+			case 38:{//up
+				if (posY > -350){
+					posY -= moveSpeed;
+				}
+				break;
+			}
+			case 39: {//right
+				if (pos < 200){
+					pos += moveSpeed;
+				}
+				isNetRight = true;
+				break;
+			}
+			case 40: {//down
+				if (posY < 20){
+					posY += moveSpeed;
+				}
+				break;
+			}
+			case 32: {//space key
+				isArmUp = false;
+				break;
+			}
+		}
+	}, false);
+
+	window.addEventListener("keyup", (event) => {
+		if (event.keyCode === 32)
+		{
+			isArmUp = true;
+		}
+	}, false);
+
+	const drawWorld = () => {
+		if (worldTime > gameDuration) {
+			endGame();
+		}
+	
+		let ctx = myCanvas.getContext("2d");
+		ctx.clearRect(0, 0, 800, 630);
+		
+		drawBG(ctx);
+
+		drawCharacter(ctx, pos, posY, worldTime);
+
+		if ((worldTime % 1600) === 0) {
+			generateBalls();
+		}
+	
+		growBalls();
+		
+		changeColor(worldTime);
+		waitForFly(worldTime);
+
+		flyupBalls();
+		
+		drawBalls(ctx);
+		collideBalls(netTopLeft, netRightBottom);
+		collideBody(bodyTopLeft, bodyBottomRight);
+		showScore(score);
+		drainBalls();
+		worldTime += updateInterval;
+	}
+	
+
+	let timer;
+	function startGame() {
+		if (!!timer) {
+			clearInterval(timer);
+		}
+		
+		balls = [];
+		
+		document.getElementById('startSong').play();
+		timer = setInterval(drawWorld, updateInterval); //16ms
+		const myCanvas = document.getElementById("gameCanvas");
+		const startButton = document.getElementById("start");
+		startButton.disabled = true;
+		myCanvas.style.backgroundImage = 'none';
+	}
+	
+	function endGame() {
+		document.getElementById('endsong').play();
+		score = 0;
+		worldTime = -1;
+		clearInterval(timer);
+		balls = [];
+		myCanvas.style.backgroundImage = 'url("endgame-screen.png")';
+		const startButton = document.getElementById("start");
+		startButton.disabled = false;
+	}
+
+	function pauseResume() {
+		let text = document.getElementById('pauseResume').value;		
+		
+		if (text == 'pause')
+		{
+			text = 'resume';
+			clearInterval(timer);
+		}
+		else if (text == 'resume')
+		{
+			text = 'pause';
+			timer = setInterval(drawWorld, updateInterval); //16ms
+		}
+		document.getElementById('pauseResume').value = text;
+	}
+	
+	function setVolume() {
+		var audio = document.getElementsByTagName('audio');
+		for (el of audio) {
+			el.volume = document.getElementById('volumeControl').value;
+		}
+	}
+	
+	function showScore(score) {
+		let ctx = myCanvas.getContext("2d");
+		ctx.font = '24px "Segoe UI"';
+		ctx.fillStyle = "black";
+		ctx.fillText("Score: " + score, 0, 30);
+	}
+	
+	const drawBG = (ctx) => {
+		ctx.beginPath();
+		ctx.lineWidth = "5";
+		ctx.rect(-20, 240, 840, 500);
+		ctx.fillStyle = "lightgreen";
+		ctx.fill();
+		ctx.strokeStyle = "black";
+		ctx.stroke();
+	}
+	
+	const drawCharacter = (ctx, pos, posY, worldTime) => {
+		//draw head
+		ctx.beginPath();
+		ctx.lineWidth = "5";
+		ctx.rect(400+pos, 600+startY+posY, 100, 50);
+		ctx.fillStyle = "yellow";
+		ctx.fill();
+		ctx.strokeStyle = "black";
+		ctx.stroke();
+		
+		//draw neck
+		ctx.lineWidth = "5";
+		ctx.rect(440+pos, 650+startY+posY, 20, 40);
+		ctx.fillStyle = "yellow";
+		ctx.fill();
+		ctx.strokeStyle = "black";
+		ctx.stroke();
+		
+		//draw body
+		ctx.lineWidth = "5";
+		ctx.rect(410+pos, 690+startY+posY, 80, 60);
+		ctx.fillStyle = "yellow";
+		ctx.fill();
+		ctx.strokeStyle = "black";
+		ctx.stroke();
+
+		bodyTopLeft = {x: 410+pos, y: 690+startY+posY};
+		bodyBottomRight = {x: 410+pos+80, y: 690+startY+posY+60};
+		
+		//draw left leg
+		ctx.beginPath();
+		ctx.lineWidth = "5";
+		ctx.rect(420+pos, 750+startY+posY, 20, 25);
+		ctx.fillStyle = "yellow";
+		ctx.fill();
+		ctx.strokeStyle = "black";
+		ctx.stroke();
+		
+		//draw right leg
+		ctx.beginPath();
+		ctx.lineWidth = "5";
+		ctx.rect(460+pos, 750+startY+posY, 20, 25);
+		ctx.fillStyle = "yellow";
+		ctx.fill();
+		ctx.strokeStyle = "black";
+		ctx.stroke();
+		
+		//draw left ear
+		ctx.beginPath();
+		ctx.moveTo(415+pos, 600+startY+posY);
+		ctx.lineTo(390+pos, 560+startY+posY);
+		ctx.lineWidth = "5";
+		ctx.strokeStyle = "black";
+		ctx.stroke();
+		ctx.lineTo(430+pos, 600+startY+posY);
+		ctx.lineWidth = "5";
+		ctx.strokeStyle = "black";
+		ctx.stroke();
+		
+		//draw right ear
+		ctx.moveTo(470+pos, 600+startY+posY);
+		ctx.lineTo(510+pos, 560+startY+posY);
+		ctx.lineWidth = "5";
+		ctx.strokeStyle = "black";
+		ctx.stroke();
+		ctx.lineTo(485+pos, 600+startY+posY);
+		ctx.lineWidth = "5";
+		ctx.strokeStyle = "black";
+		ctx.stroke();
+		ctx.closePath();
+		
+		
+		
+		
+		if(isNetRight)
+		{
+			if (isArmUp)
+			{
+				//draw right arm
+				ctx.beginPath();
+				ctx.moveTo(490+pos, 695+startY+posY);
+				ctx.lineTo(530+pos, 670+startY+posY);
+				ctx.lineWidth = "15";
+				ctx.strokeStyle = "black";
+				ctx.stroke();
+				ctx.closePath();
+			
+				//draw right fist
+				ctx.beginPath();
+				ctx.arc(530+pos, 670+startY+posY, 1, 0, 2 * Math.PI);
+				ctx.fillStyle = "yellow";
+				ctx.fill();
+				ctx.strokeStyle = "black";
+				ctx.stroke();
+				ctx.closePath();
+			
+				//draw left arm
+				ctx.beginPath();
+				ctx.moveTo(410+pos, 695+startY+posY);
+				ctx.lineTo(370+pos, 670+startY+posY);
+				ctx.lineWidth = "15";
+				ctx.strokeStyle = "black";
+				ctx.stroke();
+				ctx.closePath();
+		
+				//draw left fist
+				ctx.beginPath();
+				ctx.arc(370+pos, 670+startY+posY, 1, 0, 2 * Math.PI);
+				ctx.fillStyle = "yellow";
+				ctx.fill();
+				ctx.strokeStyle = "black";
+				ctx.stroke();
+				ctx.closePath();
+		
+				//draw net
+				ctx.beginPath();
+				ctx.moveTo(532+pos, 667+startY+posY);
+				ctx.lineTo(602+pos, 598+startY+posY);
+				ctx.lineWidth = "7";
+				ctx.strokeStyle = "black";
+				ctx.stroke();
+				ctx.closePath();
+			
+				ctx.beginPath();
+				ctx.ellipse(586.5+pos, 613.5+startY+posY, 20, 40, 135 * Math.PI/180, 0, Math.PI);
+				ctx.lineWidth = "2";
+				ctx.strokeStyle = "black";
+				ctx.stroke();
+				ctx.fillStyle = "transparent";
+				ctx.fill();
+				ctx.closePath();
+			}
+			else
+			{
+				//draw right arm
+				ctx.beginPath();
+				ctx.moveTo(490+pos, 695+startY+posY);
+				ctx.lineTo(540+pos, 695+startY+posY);
+				ctx.lineWidth = "15";
+				ctx.strokeStyle = "black";
+				ctx.stroke();
+				ctx.closePath();
+			
+				//draw right fist
+				ctx.beginPath();
+				ctx.arc(541+pos, 694+startY+posY, 1, 0, 2 * Math.PI);
+				ctx.fillStyle = "yellow";
+				ctx.fill();
+				ctx.strokeStyle = "black";
+				ctx.stroke();
+				ctx.closePath();
+			
+				//draw left arm
+				ctx.beginPath();
+				ctx.moveTo(410+pos, 695+startY+posY);
+				ctx.lineTo(370+pos, 670+startY+posY);
+				ctx.lineWidth = "15";
+				ctx.strokeStyle = "black";
+				ctx.stroke();
+				ctx.closePath();
+		
+				//draw left fist
+				ctx.beginPath();
+				ctx.arc(370+pos, 670+startY+posY, 1, 0, 2 * Math.PI);
+				ctx.fillStyle = "yellow";
+				ctx.fill();
+				ctx.strokeStyle = "black";
+				ctx.stroke();
+				ctx.closePath();
+		
+				//draw net
+				ctx.beginPath();
+				ctx.moveTo(543+pos, 693+startY+posY);
+				ctx.lineTo(620+pos, 693+startY+posY);
+				ctx.lineWidth = "7";
+				ctx.strokeStyle = "black";
+				ctx.stroke();
+				ctx.closePath();
+			
+				ctx.beginPath();
+				ctx.ellipse(600+pos, 693+startY+posY, 20, 40, 180*Math.PI/180, 0, Math.PI, false);
+				ctx.lineWidth = "2";
+				ctx.strokeStyle = "black";
+				ctx.stroke();
+				ctx.fillStyle = "transparent";
+				ctx.fill();
+				ctx.closePath();
+				
+				netTopLeft = {x: 620+pos-40, y: 693+startY+posY-40};
+				netRightBottom = {x: 620+pos, y: 693+startY+posY};
+			}			
+		}
+		else
+		{
+			if(isArmUp)
+			{
+				//draw right arm
+				ctx.beginPath();
+				ctx.moveTo(490+pos, 695+startY+posY);
+				ctx.lineTo(530+pos, 670+startY+posY);
+				ctx.lineWidth = "15";
+				ctx.strokeStyle = "black";
+				ctx.stroke();
+				ctx.closePath();
+			
+				//draw right fist
+				ctx.beginPath();
+				ctx.arc(530+pos, 670+startY+posY, 1, 0, 2 * Math.PI);
+				ctx.fillStyle = "yellow";
+				ctx.fill();
+				ctx.strokeStyle = "black";
+				ctx.stroke();
+				ctx.closePath();
+				
+				//draw left arm
+				ctx.beginPath();
+				ctx.moveTo(410+pos, 695+startY+posY);
+				ctx.lineTo(370+pos, 670+startY+posY);
+				ctx.lineWidth = "15";
+				ctx.strokeStyle = "black";
+				ctx.stroke();
+				ctx.closePath();
+		
+				//draw left fist
+				ctx.beginPath();
+				ctx.arc(370+pos, 670+startY+posY, 1, 0, 2 * Math.PI);
+				ctx.fillStyle = "yellow";
+				ctx.fill();
+				ctx.strokeStyle = "black";
+				ctx.stroke();
+				ctx.closePath();
+				
+				//draw net
+				ctx.beginPath();
+				ctx.moveTo(368+pos, 667+startY+posY);
+				ctx.lineTo(298+pos, 598+startY+posY);
+				ctx.lineWidth = "7";
+				ctx.strokeStyle = "black";
+				ctx.stroke();
+				ctx.closePath();
+				
+				ctx.beginPath();
+				ctx.ellipse(313.5+pos, 613.5+startY+posY, 20, 40, 45 * Math.PI/180, 0, Math.PI, true);
+				ctx.lineWidth = "2";
+				ctx.strokeStyle = "black";
+				ctx.stroke();
+				ctx.fillStyle = "transparent";
+				ctx.fill();
+				ctx.closePath();			
+			}
+			else
+			{
+				//draw right arm
+				ctx.beginPath();
+				ctx.moveTo(490+pos, 695+startY+posY);
+				ctx.lineTo(530+pos, 670+startY+posY);
+				ctx.lineWidth = "15";
+				ctx.strokeStyle = "black";
+				ctx.stroke();
+				ctx.closePath();
+			
+				//draw right fist
+				ctx.beginPath();
+				ctx.arc(530+pos, 670+startY+posY, 1, 0, 2 * Math.PI);
+				ctx.fillStyle = "yellow";
+				ctx.fill();
+				ctx.strokeStyle = "black";
+				ctx.stroke();
+				ctx.closePath();
+				
+				//draw left arm
+				ctx.beginPath();
+				ctx.moveTo(410+pos, 695+startY+posY);
+				ctx.lineTo(360+pos, 695+startY+posY);
+				ctx.lineWidth = "15";
+				ctx.strokeStyle = "black";
+				ctx.stroke();
+				ctx.closePath();
+				
+				//draw left fist
+				ctx.beginPath();
+				ctx.arc(359+pos, 694+startY+posY, 1, 0, 2 * Math.PI);
+				ctx.fillStyle = "yellow";
+				ctx.fill();
+				ctx.strokeStyle = "black";
+				ctx.stroke();
+				ctx.closePath();
+		
+				//draw net
+				ctx.beginPath();
+				ctx.moveTo(357+pos, 693+startY+posY);
+				ctx.lineTo(280+pos, 693+startY+posY);
+				ctx.lineWidth = "7";
+				ctx.strokeStyle = "black";
+				ctx.stroke();
+				ctx.closePath();
+			
+				ctx.beginPath();
+				ctx.ellipse(300+pos, 693+startY+posY, 20, 40, 180*Math.PI/180, 0, Math.PI, false);
+				ctx.lineWidth = "2";
+				ctx.strokeStyle = "black";
+				ctx.stroke();
+				ctx.fillStyle = "transparent";
+				ctx.fill();
+				ctx.closePath();
+				
+				netTopLeft = {x: 320+pos-40, y: 693+startY+posY-40};
+				netRightBottom = {x: 320+pos, y: 693+startY+posY};
+			}
+		}
+		
+		if (Math.floor(worldTime / 1000) % 2) {
+			//draw left eye
+			ctx.beginPath();
+			ctx.ellipse(430+pos, 625+startY+posY, 15, 5, Math.PI/2, 0, 2 * Math.PI);
+			ctx.lineWidth = "2";
+			ctx.fillStyle = "black";
+			ctx.fill();
+			ctx.strokeStyle = "black";
+			ctx.stroke();
+			ctx.closePath();
+		
+			//draw right eye
+			ctx.beginPath();
+			ctx.ellipse(470+pos, 625+startY+posY, 10, 5, Math.PI/2, 0, 2 * Math.PI);
+			ctx.lineWidth = "2";
+			ctx.fillStyle = "black";
+			ctx.fill();
+			ctx.strokeStyle = "black";
+			ctx.stroke();
+			ctx.closePath();
+		} else {
+			//draw left eye
+			ctx.beginPath();
+			ctx.ellipse(430+pos, 625+startY+posY, 10, 5, Math.PI/2, 0, 2 * Math.PI);
+			ctx.lineWidth = "2";
+			ctx.fillStyle = "black";
+			ctx.fill();
+			ctx.strokeStyle = "black";
+			ctx.stroke();
+			ctx.closePath();
+		
+			//draw right eye
+			ctx.beginPath();
+			ctx.ellipse(470+pos, 625+startY+posY, 15, 5, Math.PI/2, 0, 2 * Math.PI);
+			ctx.lineWidth = "2";
+			ctx.fillStyle = "black";
+			ctx.fill();
+			ctx.strokeStyle = "black";
+			ctx.stroke();
+			ctx.closePath();
+		}
+	}
+		
+	function drawBalls(ctx) {
+		for (el of balls) {
+			if (!el.disabled) {
+				ctx.beginPath();
+				ctx.fillStyle = el.color;
+				ctx.arc(el.x, el.y, el.radius, 0, Math.PI * 2, true);
+				ctx.fill();
+				ctx.closePath();
+			}
+		}
+	}
+	
+	function growBalls() {
+		for (el of balls) {
+			if (el.state === 0) {
+				el.state = 1;
+			}
+			
+			if (el.state === 1) {
+				el.radius += (20 - 6) / (5000 / updateInterval);
+				
+				if (el.radius >= 20) {
+					el.radius = 20;
+					el.state = 2;
+				}
+			}
+		}
+	}
+	
+	function changeColor(worldTime) {
+		for (el of balls) {
+			if (el.state === 2) {
+				let rgb = hexToRgb(el.color);
+				if (!!rgb) {
+					rgb.g -= 1;
+					if (rgb.g > 0) 
+					{
+						el.color = rgbToHex(rgb.r, rgb.g, rgb.b);
+						
+					} else {
+						el.state = 3;
+						el.timeWait = worldTime;
+					}
+				}
+			}
+		}
+	}
+	
+	function waitForFly(worldTime) {
+		for (el of balls) {
+			if (el.state === 3 && worldTime - el.timeWait > 4000) {
+				el.state = 4;
+			}
+		}
+	}
+	
+	function flyupBalls() {
+		for (el of balls) {
+			if (el.state === 4) {
+				el.y -= speed;
+			}
+		}
+	}
+	
+	function collideBalls(netTopLeft, netBottomRight) {
+		if (isArmUp) { return; }
+		
+		for (el of balls) {
+			var ballTopLeft = {x: el.x - el.radius, y: el.y - el.radius};
+			var ballBottomRight = {x: el.x + el.radius, y: el.y + el.radius};
+			if (
+				netTopLeft.x < ballBottomRight.x &&
+				netTopLeft.y < ballBottomRight.y &&
+				netBottomRight.x > ballTopLeft.x &&
+				netBottomRight.y > ballTopLeft.y
+			) {
+				if (!el.disabled) {
+					score += 1;
+				}
+				el.disabled = true;
+				document.getElementById('success').play();
+			}
+		}
+	}
+	
+	function collideBody(bodyTopLeft, bodyBottomRight) {			
+		for (el of balls) {
+			var ballTopLeft = {x: el.x - el.radius, y: el.y - el.radius};
+			var ballBottomRight = {x: el.x + el.radius, y: el.y + el.radius};
+			if (
+				bodyTopLeft.x < ballBottomRight.x &&
+				bodyTopLeft.y < ballBottomRight.y &&
+				bodyBottomRight.x > ballTopLeft.x &&
+				bodyBottomRight.y > ballTopLeft.y
+			) {
+				if (!el.disabled) {
+					score -= 1;
+				}
+				el.disabled = true;
+				document.getElementById('unhappy').play();
+			}
+		}
+	}
+	
+	function generateBalls() {
+		const x = Math.floor(Math.random() * 800);
+		let newBall = {
+			x,
+			y: 600,
+			radius: 6,
+			color: '#FFFF00',
+			state: 0, // 0 new; 1 growing; 2 changing color; 3 waiting; 4 flying;
+			disabled: false,
+			timeWait: 0,
+		};
+		
+		balls.push(newBall);
+	}
+	
+	function drainBalls() {
+		while (balls.length > 0 && balls[0].y < 0) {
+			balls.splice(0, 1);
+		}
+		
+		//console.log(balls.length);
+	}
+	
+	function hexToRgb(hex) {
+		var result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+		//console.log('parsed rgb:' + result[1] + ':' + result[2] + ':' + result[3])
+		return result ? {
+			r: parseInt(result[1], 16),
+			g: parseInt(result[2], 16),
+			b: parseInt(result[3], 16)
+		} : null;
+	}
+	
+	function componentToHex(c) {
+		var hex = c.toString(16);
+		return hex.length == 1 ? "0" + hex : hex;
+	}
+
+	function rgbToHex(r, g, b) {
+		//console.log('rgb:' + r + ':' + g + ':' + b)
+		return "#" + componentToHex(r) + componentToHex(g) + componentToHex(b);
+	}
+
+
+	
+</script>
+</body>
+</html>
