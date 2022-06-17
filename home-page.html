@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html>
+<head>
+<style>
+body {
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+.navbar {
+  overflow: hidden;
+  background-color: #333;
+  display: flex;
+  justify-content: center;
+}
+
+.navbar a {
+  float: left;
+  font-size: 16px;
+  color: white;
+  text-align: center;
+  padding: 14px 16px;
+  text-decoration: none;
+}
+
+.dropdown {
+  float: left;
+  overflow: hidden;
+}
+
+.dropdown .dropbtn {
+  font-size: 16px;  
+  border: none;
+  outline: none;
+  color: white;
+  padding: 14px 16px;
+  background-color: inherit;
+  font-family: inherit;
+  margin: 0;
+}
+
+.navbar a:hover, .dropdown:hover .dropbtn {
+  background-color: red;
+}
+
+.dropdown-content {
+  display: none;
+  position: absolute;
+  background-color: #f9f9f9;
+  min-width: 160px;
+  box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.2);
+  z-index: 1;
+}
+
+.dropdown-content a {
+  float: none;
+  color: black;
+  padding: 12px 16px;
+  text-decoration: none;
+  display: block;
+  text-align: left;
+}
+
+.dropdown-content a:hover {
+  background-color: #ddd;
+}
+
+.dropdown:hover .dropdown-content {
+  display: block;
+}
+
+#body {
+  display: flex;
+  padding-top: 50px;
+  justify-content: center;
+}
+
+.title {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+</style>
+</head>
+<body>
+<div class="title">
+  <h1> Wakatipu Boat Adventure </h1>
+</div>
+<div class="navbar">
+  <a href="booking/boatBooking.html">Boat Booking</a>
+  <a href="game/ballCatchingGame.html">Game</a>
+  <div class="dropdown">
+    <button class="dropbtn">Booking Document 
+      <i class="fa fa-caret-down"></i>
+    </button>
+    <div class="dropdown-content">
+      <a href="#">XML</a>
+      <a href="#">Wireframe</a>
+    </div>
+  </div> 
+  
+  <div class="dropdown">
+    <button class="dropbtn">Game Document 
+      <i class="fa fa-caret-down"></i>
+    </button>
+    <div class="dropdown-content">
+      <a href="https://github.com/ChristinYe/Assignment2/blob/main/documents/Storyboard-for-ball-catching-game.pdf">Storyboard</a>
+      <a href="https://github.com/ChristinYe/Assignment2/blob/main/documents/wireframe-for-ball-catching-game.pdf">Wireframe</a>
+    </div>
+  </div> 
+</div>
+
+<div id="body">
+<img src="game/images/home-page.jpg" />
+</div>
+</body>
+</html>
